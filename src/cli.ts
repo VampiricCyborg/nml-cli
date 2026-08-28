@@ -3,7 +3,8 @@
 import { Command } from 'commander';
 import packageJson from '../package.json' with { type: 'json' };
 import { extractClaim, formatClaimSummary } from './claim-parser.js';
-import { checkCommit, formatCheckSummary } from './check.js';
+import { checkCommit, checkRange, findGitRoot, formatCheckRangeSummary, formatCheckSummary, inferTestCommand } from './check.js';
+import { installHook, uninstallHook } from './hooks.js';
 import { formatSummary, VerificationError, verifyCommand } from './verifier.js';
 
 const program = new Command();
@@ -16,25 +17,40 @@ program
 program
   .command('check')
   .description('Check whether a commit truthfully claims that tests pass')
-  .requiredOption('--test-cmd <command>', 'shell command to execute when a tests-pass claim is found')
+  .option('--test-cmd <command>', 'shell command to execute when a tests-pass claim is found')
   .option('--commit <ref>', 'commit/ref to inspect', 'HEAD')
-  .option('--cwd <path>', 'repository and working directory', process.cwd())
+  .option('--range <refs>', 'check commits in a ref range (for example main..feature)')
+  .option('--cwd <path>', 'starting directory; defaults to the git root found from cwd')
   .option('--timeout <seconds>', 'test command timeout in seconds', '300')
   .option('--json', 'print the full receipt as JSON')
-  .action(async (options: { commit: string; testCmd: string; cwd: string; timeout: string; json?: boolean }) => {
+  .action(async (options: { commit: string; range?: string; testCmd?: string; cwd?: string; timeout: string; json?: boolean }) => {
     const timeoutSeconds = Number(options.timeout);
     if (!Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0) {
       throw new Error('Timeout must be a positive number of seconds.');
     }
-    const receipt = await checkCommit({
-      commit: options.commit,
-      testCmd: options.testCmd,
-      cwd: options.cwd,
-      timeoutMs: timeoutSeconds * 1000,
-    });
-    process.exitCode = receipt.verdict === 'false_claim' ? 1 : 0;
-    console.log(options.json ? JSON.stringify(receipt, null, 2) : formatCheckSummary(receipt));
+    const cwd = await findGitRoot(options.cwd);
+    const testCmd = options.testCmd ?? (await inferTestCommand(cwd));
+    if (!testCmd) throw new Error('Unable to infer a test command. Pass --test-cmd explicitly.');
+    if (options.range) {
+      const receipts = await checkRange(options.range, { testCmd, cwd, timeoutMs: timeoutSeconds * 1000 });
+      process.exitCode = receipts.some((receipt) => receipt.verdict === 'false_claim') ? 1 : 0;
+      console.log(options.json ? JSON.stringify(receipts, null, 2) : formatCheckRangeSummary(receipts));
+    } else {
+      const receipt = await checkCommit({ commit: options.commit, testCmd, cwd, timeoutMs: timeoutSeconds * 1000 });
+      process.exitCode = receipt.verdict === 'false_claim' ? 1 : 0;
+      console.log(options.json ? JSON.stringify(receipt, null, 2) : formatCheckSummary(receipt));
+    }
   });
+
+program.command('install-hook').description('Install the plub pre-push hook')
+  .option('--cwd <path>', 'repository directory', process.cwd()).action(async (options: { cwd: string }) => {
+  console.log(`Installed plub pre-push hook at ${await installHook(options.cwd)}`);
+});
+
+program.command('uninstall-hook').description('Remove the plub pre-push hook')
+  .option('--cwd <path>', 'repository directory', process.cwd()).action(async (options: { cwd: string }) => {
+  console.log(`Removed plub pre-push hook at ${await uninstallHook(options.cwd)}`);
+});
 
 program
   .command('verify')

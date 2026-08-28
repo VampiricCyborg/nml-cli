@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { checkCommit } from '../src/check.js';
+import { checkCommit, checkRange, findGitRoot, inferTestCommand } from '../src/check.js';
 
 const temporaryRepos: string[] = [];
 
@@ -30,6 +30,27 @@ afterEach(async () => {
 });
 
 describe('checkCommit', () => {
+  it('finds the repository root and infers npm test from package.json', async () => {
+    const repo = await makeRepo('implement feature; all tests pass');
+    await writeFile(join(repo, 'package.json'), JSON.stringify({ scripts: { test: 'node test.js' } }));
+    const nested = join(repo, 'nested');
+    await (await import('node:fs/promises')).mkdir(nested);
+    expect(await findGitRoot(nested)).toBe(repo);
+    expect(await inferTestCommand(repo)).toBe('npm test');
+    const receipt = await checkCommit({ cwd: nested }, async (command, cwd) => ({
+      command,
+      cwd,
+      exitCode: 0,
+      passed: true,
+      stdout: '',
+      stderr: '',
+      durationMs: 1,
+      timestamp: new Date().toISOString(),
+      timedOut: false,
+    }));
+    expect(receipt.verdict).toBe('verified');
+  });
+
   it('returns verified when the claimed test command passes', async () => {
     const repo = await makeRepo('implement feature; all tests pass');
     const receipt = await checkCommit({
@@ -74,5 +95,23 @@ describe('checkCommit', () => {
     expect(receipt.verdict).toBe('no_claim');
     expect(receipt.verification).toBeNull();
     expect(verifierCalled).toBe(false);
+  });
+
+  it('checks only claimed commits in a range', async () => {
+    const repo = await makeRepo('base change');
+    const base = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8' }).trim();
+    await writeFile(join(repo, 'file.txt'), 'claimed\n');
+    execFileSync('git', ['add', '.'], { cwd: repo });
+    execFileSync('git', ['commit', '-qm', 'feature; tests pass'], { cwd: repo });
+    const feature = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8' }).trim();
+    await writeFile(join(repo, 'file.txt'), 'other\n');
+    execFileSync('git', ['add', '.'], { cwd: repo });
+    execFileSync('git', ['commit', '-qm', 'unrelated change'], { cwd: repo });
+    const receipts = await checkRange(`${base}..${feature}`, { cwd: repo, testCmd: 'ignored' }, async () => ({
+      command: 'ignored', cwd: repo, exitCode: 0, passed: true, stdout: '', stderr: '', durationMs: 1,
+      timestamp: new Date().toISOString(), timedOut: false,
+    }));
+    expect(receipts).toHaveLength(1);
+    expect(receipts[0].commit).toBe(feature);
   });
 });

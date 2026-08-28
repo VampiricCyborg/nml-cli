@@ -1,6 +1,6 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import process from 'node:process';
 import { extractClaim, type Claim } from './claim-parser.js';
@@ -21,7 +21,7 @@ export interface CheckReceipt {
 
 export interface CheckOptions {
   commit?: string;
-  testCmd: string;
+  testCmd?: string;
   cwd?: string;
   timeoutMs?: number;
 }
@@ -41,11 +41,40 @@ async function git(args: string[], cwd: string): Promise<string> {
   }
 }
 
+/** Find the repository root, including when invoked from a nested directory. */
+export async function findGitRoot(start = process.cwd()): Promise<string> {
+  let current = resolve(start);
+  while (true) {
+    try {
+      await access(join(current, '.git'));
+      return current;
+    } catch {
+      const parent = dirname(current);
+      if (parent === current) {
+        throw new Error(`Unable to find a git repository from "${start}".`);
+      }
+      current = parent;
+    }
+  }
+}
+
+/** The MVP convention is deliberately simple: a package test script means npm test. */
+export async function inferTestCommand(repoRoot: string): Promise<string | undefined> {
+  try {
+    const packageJson = JSON.parse(await readFile(join(repoRoot, 'package.json'), 'utf8')) as {
+      scripts?: Record<string, unknown>;
+    };
+    return typeof packageJson.scripts?.test === 'string' ? 'npm test' : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function checkCommit(
   options: CheckOptions,
   verify: Verify = verifyCommand,
 ): Promise<CheckReceipt> {
-  const cwd = options.cwd ?? process.cwd();
+  const cwd = await findGitRoot(options.cwd ?? process.cwd());
   const ref = options.commit ?? 'HEAD';
   const commit = await git(['rev-parse', ref], cwd);
   const message = await git(['log', '-1', '--format=%B', ref], cwd);
@@ -56,7 +85,11 @@ export async function checkCommit(
   if (claim.type === 'none') {
     verdict = 'no_claim';
   } else {
-    verification = await verify(options.testCmd, cwd, options.timeoutMs);
+    const testCmd = options.testCmd ?? (await inferTestCommand(cwd));
+    if (!testCmd) {
+      throw new Error('Unable to infer a test command. Pass --test-cmd explicitly.');
+    }
+    verification = await verify(testCmd, cwd, options.timeoutMs);
     verdict =
       claim.confidence === 'low'
         ? 'low_confidence_claim'
@@ -80,6 +113,29 @@ export async function checkCommit(
     'utf8',
   );
   return receipt;
+}
+
+export async function checkRange(
+  range: string,
+  options: Omit<CheckOptions, 'commit'>,
+  verify: Verify = verifyCommand,
+): Promise<CheckReceipt[]> {
+  const cwd = await findGitRoot(options.cwd ?? process.cwd());
+  const commits = (await git(['rev-list', '--reverse', range], cwd)).split('\n').filter(Boolean);
+  const receipts: CheckReceipt[] = [];
+  for (const commit of commits) {
+    const message = await git(['log', '-1', '--format=%B', commit], cwd);
+    if (extractClaim(message).type !== 'none') {
+      receipts.push(await checkCommit({ ...options, commit, cwd }, verify));
+    }
+  }
+  return receipts;
+}
+
+export function formatCheckRangeSummary(receipts: CheckReceipt[]): string {
+  return receipts.length === 0
+    ? 'No tests-pass claims found in the commit range.'
+    : receipts.map(formatCheckSummary).join('\n\n');
 }
 
 export function formatCheckSummary(receipt: CheckReceipt): string {
