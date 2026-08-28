@@ -1,0 +1,1 @@
+{"name":"failing-fixture","private":true,"scripts":{"test":"node test.js"}}
