@@ -3,6 +3,7 @@
 import { Command } from 'commander';
 import packageJson from '../package.json' with { type: 'json' };
 import { extractClaim, formatClaimSummary } from './claim-parser.js';
+import { checkCommit, formatCheckSummary } from './check.js';
 import { formatSummary, VerificationError, verifyCommand } from './verifier.js';
 
 const program = new Command();
@@ -11,6 +12,29 @@ program
   .name('plub')
   .description('Independently verify claims made by AI coding agents.')
   .version(packageJson.version);
+
+program
+  .command('check')
+  .description('Check whether a commit truthfully claims that tests pass')
+  .requiredOption('--test-cmd <command>', 'shell command to execute when a tests-pass claim is found')
+  .option('--commit <ref>', 'commit/ref to inspect', 'HEAD')
+  .option('--cwd <path>', 'repository and working directory', process.cwd())
+  .option('--timeout <seconds>', 'test command timeout in seconds', '300')
+  .option('--json', 'print the full receipt as JSON')
+  .action(async (options: { commit: string; testCmd: string; cwd: string; timeout: string; json?: boolean }) => {
+    const timeoutSeconds = Number(options.timeout);
+    if (!Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0) {
+      throw new Error('Timeout must be a positive number of seconds.');
+    }
+    const receipt = await checkCommit({
+      commit: options.commit,
+      testCmd: options.testCmd,
+      cwd: options.cwd,
+      timeoutMs: timeoutSeconds * 1000,
+    });
+    process.exitCode = receipt.verdict === 'false_claim' ? 1 : 0;
+    console.log(options.json ? JSON.stringify(receipt, null, 2) : formatCheckSummary(receipt));
+  });
 
 program
   .command('verify')
