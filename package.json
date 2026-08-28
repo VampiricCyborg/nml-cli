@@ -1,0 +1,27 @@
+{
+  "name": "plub-cli",
+  "version": "0.1.0",
+  "description": "Independently verify claims made by AI coding agents.",
+  "type": "module",
+  "bin": {"plub": "dist/cli.js"},
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint src test eslint.config.js",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run --pool=threads --poolOptions.threads.singleThread"
+  },
+  "engines": {"node": ">=20"},
+  "dependencies": {"commander": "^14.0.0"},
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.6.0",
+    "typescript": "^5.9.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^3.2.0"
+  }
+}
