@@ -1,5 +1,5 @@
 import { access, stat } from 'node:fs/promises';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import process from 'node:process';
 
 export interface VerificationResult {
@@ -31,7 +31,12 @@ async function validateCwd(cwd: string): Promise<void> {
 function killProcessTree(child: ReturnType<typeof spawn>): void {
   if (child.pid === undefined) return;
   if (process.platform === 'win32') {
-    spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+    child.kill();
+    try {
+      execFileSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+    } catch {
+      // The process may already have exited between child.kill and taskkill.
+    }
   } else {
     try {
       process.kill(-child.pid, 'SIGKILL');
@@ -71,6 +76,9 @@ export async function verifyCommand(
       timedOut = true;
       stderr += `\nCommand timed out after ${timeoutMs}ms.\n`;
       killProcessTree(child);
+      // Do not wait for a descendant that may keep stdio handles open after
+      // the process tree has been terminated.
+      finish(null);
     }, timeoutMs);
     const finish = (exitCode: number | null) => {
       if (settled) return;

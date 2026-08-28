@@ -2,6 +2,7 @@
 
 import { Command } from 'commander';
 import packageJson from '../package.json' with { type: 'json' };
+import { extractClaim, formatClaimSummary } from './claim-parser.js';
 import { formatSummary, VerificationError, verifyCommand } from './verifier.js';
 
 const program = new Command();
@@ -26,6 +27,22 @@ program
     const result = await verifyCommand(options.cmd, options.cwd, timeoutSeconds * 1000);
     process.exitCode = result.passed ? 0 : 1;
     console.log(options.json ? JSON.stringify(result, null, 2) : formatSummary(result));
+  });
+
+program
+  .command('extract-claim')
+  .description('Detect a tests-pass claim in text')
+  .argument('[text]', 'text to inspect')
+  .option('--stdin', 'read the source text from stdin')
+  .option('--json', 'print the structured claim as JSON')
+  .action(async (text: string | undefined, options: { stdin?: boolean; json?: boolean }) => {
+    let sourceText = text ?? '';
+    if (options.stdin || text === undefined) {
+      sourceText = '';
+      for await (const chunk of process.stdin) sourceText += chunk.toString();
+    }
+    const claim = extractClaim(sourceText);
+    console.log(options.json ? JSON.stringify(claim, null, 2) : formatClaimSummary(claim));
   });
 
 try {
