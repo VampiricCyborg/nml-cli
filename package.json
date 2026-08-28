@@ -1,9 +1,9 @@
 {
-  "name": "plub-cli",
+  "name": "plumb-cli",
   "version": "0.1.0",
   "description": "Independently verify claims made by AI coding agents.",
   "type": "module",
-  "bin": {"plub": "dist/cli.js"},
+  "bin": {"plumb": "dist/cli.js"},
   "files": ["dist"],
   "scripts": {
     "build": "tsc",

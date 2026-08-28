@@ -105,7 +105,7 @@ export async function checkCommit(
     verdict,
     timestamp: new Date().toISOString(),
   };
-  const receiptDir = join(cwd, '.plub');
+  const receiptDir = join(cwd, '.plumb');
   await mkdir(receiptDir, { recursive: true });
   await writeFile(
     join(receiptDir, `${commit.slice(0, 7)}.json`),
@@ -162,7 +162,7 @@ export function formatCheckSummary(receipt: CheckReceipt): string {
     lines.push(`Verdict: ${receipt.verdict}`);
   }
   lines.push(
-    `Receipt: .plub/${receipt.commit.slice(0, 7)}.json`,
+    `Receipt: .plumb/${receipt.commit.slice(0, 7)}.json`,
     `Timestamp: ${receipt.timestamp}`,
   );
   return lines.join('\n');

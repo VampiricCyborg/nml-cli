@@ -8,13 +8,13 @@ import { checkCommit, checkRange, findGitRoot, inferTestCommand } from '../src/c
 const temporaryRepos: string[] = [];
 
 async function makeRepo(message: string): Promise<string> {
-  const repo = await mkdtemp(join(tmpdir(), 'plub-check-'));
+  const repo = await mkdtemp(join(tmpdir(), 'plumb-check-'));
   temporaryRepos.push(repo);
   execFileSync('git', ['init', '-q'], { cwd: repo });
   execFileSync('git', ['config', 'user.email', 'test@example.com'], {
     cwd: repo,
   });
-  execFileSync('git', ['config', 'user.name', 'Plub Test'], { cwd: repo });
+    execFileSync('git', ['config', 'user.name', 'Plumb Test'], { cwd: repo });
   await writeFile(join(repo, 'file.txt'), 'fixture\n');
   execFileSync('git', ['add', '.'], { cwd: repo });
   execFileSync('git', ['commit', '-qm', message], { cwd: repo });
@@ -63,7 +63,7 @@ describe('checkCommit', () => {
     expect(
       JSON.parse(
         await readFile(
-          join(repo, '.plub', `${receipt.commit.slice(0, 7)}.json`),
+          join(repo, '.plumb', `${receipt.commit.slice(0, 7)}.json`),
           'utf8',
         ),
       ),

@@ -10,7 +10,7 @@ import { formatSummary, VerificationError, verifyCommand } from './verifier.js';
 const program = new Command();
 
 program
-  .name('plub')
+  .name('plumb')
   .description('Independently verify claims made by AI coding agents.')
   .version(packageJson.version);
 
@@ -42,14 +42,14 @@ program
     }
   });
 
-program.command('install-hook').description('Install the plub pre-push hook')
+program.command('install-hook').description('Install the plumb pre-push hook')
   .option('--cwd <path>', 'repository directory', process.cwd()).action(async (options: { cwd: string }) => {
-  console.log(`Installed plub pre-push hook at ${await installHook(options.cwd)}`);
+  console.log(`Installed plumb pre-push hook at ${await installHook(options.cwd)}`);
 });
 
-program.command('uninstall-hook').description('Remove the plub pre-push hook')
+program.command('uninstall-hook').description('Remove the plumb pre-push hook')
   .option('--cwd <path>', 'repository directory', process.cwd()).action(async (options: { cwd: string }) => {
-  console.log(`Removed plub pre-push hook at ${await uninstallHook(options.cwd)}`);
+  console.log(`Removed plumb pre-push hook at ${await uninstallHook(options.cwd)}`);
 });
 
 program

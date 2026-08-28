@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { findGitRoot } from './check.js';
 
 const execFileAsync = promisify(execFile);
-const marker = '# plub pre-push hook (managed)';
+const marker = '# plumb pre-push hook (managed)';
 
 const hookContents = `#!/bin/sh
 ${marker}
@@ -17,9 +17,9 @@ do
     0000000000000000000000000000000000000000) range="$local_sha^..$local_sha" ;;
     *) range="$remote_sha..$local_sha" ;;
   esac
-  if ! plub check --range "$range"; then
-    echo "plub: push blocked because a commit contains a false_claim." >&2
-    echo "plub: override only when necessary with: git push --no-verify" >&2
+  if ! plumb check --range "$range"; then
+    echo "plumb: push blocked because a commit contains a false_claim." >&2
+    echo "plumb: override only when necessary with: git push --no-verify" >&2
     exit 1
   fi
 done
@@ -53,7 +53,7 @@ export async function uninstallHook(start = process.cwd()): Promise<string> {
   const path = await hookPath(repoRoot);
   try {
     const existing = await readFile(path, 'utf8');
-    if (!existing.includes(marker)) throw new Error(`The pre-push hook at ${path} is not managed by plub; refusing to remove it.`);
+    if (!existing.includes(marker)) throw new Error(`The pre-push hook at ${path} is not managed by plumb; refusing to remove it.`);
     await rm(path);
   } catch (error) {
     if (error instanceof Error && (error.message.includes('refusing to remove') || (error as NodeJS.ErrnoException).code !== 'ENOENT')) throw error;

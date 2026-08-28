@@ -1,110 +1,80 @@
-# plub
+# plumb
 
-`plub` independently verifies “tests pass” claims made in git commits by re-running the project’s tests and writing a shareable receipt.
+`plumb` independently verifies “tests pass” claims made in git commits by re-running the project’s tests and writing a shareable receipt.
 
 ## The problem
 
-AI coding agents routinely report success — “tests pass”, “added auth”, “fixed the bug” — without anything independently checking that claim against the actual state of the system. The person or team relying on the agent has no cheap, fast way to know whether “done” means verified or just asserted.
-
-This is not primarily a code-quality problem. It is a trust problem: the gap between what an agent says it did and what it actually did. That gap causes shipped bugs and wasted review time when a human has to manually re-check work the agent already claimed to have checked.
+AI coding agents routinely report success (“tests pass”, “added auth”, “fixed the bug”) without anything independently checking those claims against the actual system. This is a trust problem: “done” may mean verified or merely asserted.
 
 ## How it works
 
-The MVP loop is deliberately deterministic:
-
 1. Extract a narrow tests-pass claim from a git commit message.
-2. Ignore any test output reported by the agent.
-3. Re-run the real test command from the repository root.
-4. Compare the claim with the fresh result and write a JSON receipt under `.plub/`.
+2. Ignore agent-reported output and re-run the real test command from the git root.
+3. Compare the claim with the fresh result and write a JSON receipt under `.plumb/`.
 
-The default test command is `npm test` when the repository’s `package.json` contains a `scripts.test` entry. Otherwise, pass `--test-cmd` explicitly. `plub` finds the git root automatically when invoked from a nested directory.
+When `package.json` contains `scripts.test`, the command defaults to `npm test`; otherwise pass `--test-cmd` explicitly. The git root is detected automatically from nested directories.
 
 ## Prior art / how this differs
 
-This project builds on an established evidence-and-gating pattern; it does not claim to invent that category.
+This is an incremental extension of an established evidence-and-gating pattern, not a new category.
 
-- [MartinLoop](https://martinloop.com/) is a shipped CLI/MCP tool for running coding agents with budgets, verification gates, rollback/stop rules, and signed per-run receipts. `plub` is narrower and aimed at an individual developer or hackathon team: it starts from an existing git commit, extracts a claim from its message, and emits a simple receipt for that claim rather than governing an agent run or spend.
-- [HORKOS](https://github.com/VeritasForge/demiurge) is part of the Demiurge tooling ecosystem and uses deterministic Claude Code evidence-audit hooks to block completion without proof. `plub` is a standalone git-focused CLI: its current integration is a pre-push hook, and its narrow differentiator is commit-message claim extraction plus a fresh test check.
-- [EviBound](https://arxiv.org/abs/2511.05524) is an academic governance framework for autonomous research agents, using approval and post-execution evidence gates tied to queryable artifacts such as MLflow runs. `plub` targets local software repositories and a single claim type, “tests pass,” rather than research workflow governance.
+- [MartinLoop](https://martinloop.com/) is a shipped CLI/MCP tool for agent budgets, verification gates, rollback/stop rules, and signed per-run receipts. `plumb` is narrower: it targets individual developers and hackathon teams, extracts a claim from an existing commit, and emits a simple per-claim receipt.
+- [HORKOS](https://github.com/VeritasForge/demiurge) is part of the Demiurge ecosystem and provides deterministic Claude Code evidence-audit hooks. `plumb` is a standalone git-focused CLI with commit-message claim extraction and a fresh test check.
+- [EviBound](https://arxiv.org/abs/2511.05524) is an academic framework for autonomous research agents using approval and MLflow-backed evidence gates. `plumb` targets local software repositories and one claim type: “tests pass”.
 
-The practical scope difference is intentionally small: individual/hackathon-focused usage, commit-message claim extraction, and one claim type end-to-end. This is an incremental extension of a validated pattern, not a new category.
+The narrow difference is individual/hackathon-focused usage, commit-message claim extraction, and one claim type end-to-end.
 
-## Install
+## Install and quickstart
 
-Requires Node.js 20 or newer and git.
+Requires Node.js 20+ and git.
 
 ```sh
 git clone <repository-url>
-cd vibe-coder
+cd plumb-cli
 npm install
 npm run build
 npm link
+plumb check
 ```
 
-For a local checkout without linking, use `node dist/cli.js` in the examples below.
-
-## Quickstart
-
-From any directory inside a git repository:
+From any directory inside a repository, `plumb check` checks `HEAD` with inferred `npm test`. Use an explicit command when needed:
 
 ```sh
-plub check
+plumb check --test-cmd "python -m pytest"
+plumb check --range main..feature-branch
+plumb check --range origin/main..HEAD --json
 ```
 
-If `package.json` has a test script, `plub` infers `npm test`. To provide another command:
+Range mode checks only commits containing supported claims. Receipts are written to `.plumb/<short-sha>.json`.
+
+Install the optional pre-push check and remove it later with:
 
 ```sh
-plub check --test-cmd "python -m pytest"
+plumb install-hook
+plumb uninstall-hook
 ```
 
-Check a single ref or all commits introduced by a branch:
-
-```sh
-plub check --commit HEAD
-plub check --range main..feature-branch
-plub check --range origin/main..HEAD --json
-```
-
-Commits without a tests-pass claim are skipped in range mode. Each claimed commit gets a receipt in `.plub/<short-sha>.json`.
-
-Install the optional pre-push check:
-
-```sh
-plub install-hook
-git push origin feature-branch
-```
-
-The hook checks commits about to be pushed and blocks a push when a claim produces `false_claim`. Git’s normal bypass remains available for an intentional override:
-
-```sh
-git push --no-verify
-```
-
-Remove the managed hook with:
-
-```sh
-plub uninstall-hook
-```
+A `false_claim` blocks the push. Git’s explicit override remains available: `git push --no-verify`.
 
 ## Verdicts and receipts
 
-- `verified`: a high-confidence tests-pass claim was followed by a passing fresh test run.
-- `false_claim`: a high-confidence claim was followed by a failing or timed-out test run.
-- `low_confidence_claim`: indirect language such as “CI is passing” was detected; the test result is recorded but the wording is intentionally not treated as a definitive claim.
-- `no_claim`: no supported claim was found. In range mode, these commits do not create receipts.
+- `verified`: a high-confidence tests-pass claim followed by a passing fresh test run.
+- `false_claim`: a high-confidence claim followed by a failed or timed-out test run.
+- `low_confidence_claim`: indirect language such as “CI is passing”.
+- `no_claim`: no supported claim; range mode skips receipt creation for these commits.
 
-Use `--json` for machine-readable output. Receipts include the commit SHA, extracted claim, test command/result, raw stdout/stderr, exit code, duration, verdict, and timestamp.
+`--json` includes the commit, claim, test result, raw output, exit code, duration, verdict, and timestamp.
 
 ## Demo
 
-The reproducible before/after terminal demo is [scripts/demo-false-claim.ps1](scripts/demo-false-claim.ps1). After building, run:
+The cross-platform POSIX demo is [scripts/demo-false-claim.sh](scripts/demo-false-claim.sh). A Windows PowerShell equivalent is [scripts/demo-false-claim.ps1](scripts/demo-false-claim.ps1).
 
-```powershell
+```sh
 npm run build
-powershell -ExecutionPolicy Bypass -File .\scripts\demo-false-claim.ps1
+sh scripts/demo-false-claim.sh
 ```
 
-It creates a temporary repository, makes an agent-authored commit claiming “tests pass”, deliberately makes the test command fail, and shows `plub` returning `false_claim`.
+Both scripts create a temporary repository, make an agent-authored commit claiming “tests pass”, deliberately fail the test command, and show the `false_claim` verdict.
 
 ## Current scope and explicit non-goals
 
@@ -123,14 +93,14 @@ It creates a temporary repository, makes an agent-authored commit claiming “te
 - IDE/agent-hook integration (Claude Code hooks, Cursor rules) — start as a standalone CLI, integrate later if it proves useful.
 - Multi-language support beyond the first target stack.
 
-**Explicit non-goal:** re-implementing MartinLoop, EviBound, or HORKOS. If, after reviewing their source, 70% of the MVP is already covered by an existing open-source tool, the right move is to extend/fork/build on top of it and clearly say so — not quietly reinvent it.
+**Explicit non-goal:** re-implementing MartinLoop, EviBound, or HORKOS. If 70% of the MVP is already covered by an existing open-source tool, extend/fork/build on it and say so rather than quietly reinventing it.
 
 ## Roadmap / deferred work
 
-- **General claim types:** deferred until real usage shows that claims beyond “tests pass” are frequent and can be mapped to checks safely. Arbitrary claims such as “added auth” or “fixed the bug” need a substantially broader evidence model.
-- **Chat-log parsing:** deferred because commit-message extraction is the smallest useful source boundary. Chat transcripts are noisier, provider-specific, and harder to associate with one reproducible repository state.
-- **Budget governance:** deferred because spend caps, rollback, compliance, and multi-agent operations are already central to tools such as MartinLoop and outside this MVP’s individual-builder focus.
-- **IDE/agent integrations:** deferred until the standalone CLI and pre-push workflow validate demand; the next obvious integration should be chosen from observed usage rather than assumed.
+- **General claim types:** deferred until real usage validates demand and safe mappings to checks.
+- **Chat-log parsing:** deferred because commit messages are the smallest reproducible source boundary; transcripts are noisier and provider-specific.
+- **Budget governance:** deferred because spend caps, rollback, compliance, and multi-agent operations are MartinLoop-style territory outside this MVP’s individual-builder focus.
+- **IDE/agent integrations:** deferred until standalone CLI and pre-push usage validate demand.
 
 ## Development
 
@@ -141,4 +111,4 @@ npm run lint
 npm test
 ```
 
-CI runs the same build, lint, and test checks on pushes and pull requests.
+CI runs build, lint, and tests on pushes and pull requests.
