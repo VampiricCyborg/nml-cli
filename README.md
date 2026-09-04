@@ -57,6 +57,14 @@ The practical scope difference is intentionally small: individual/hackathon-focu
 
 Requires Node.js 20 or newer and git.
 
+The CLI is published to npm and can be installed globally with:
+
+```bash
+npm install -g @madhav_ms/nml-cli
+```
+
+After installation, use the `nml` command from any directory inside a git repository.
+
 ```bash
 git clone https://github.com/VampiricCyborg/nml-cli.git
 cd nml-cli
