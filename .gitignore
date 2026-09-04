@@ -4,6 +4,13 @@ node_modules/
 # Build output
 dist/
 coverage/
+*.tsbuildinfo
+
+# Local NML verification receipts
+.nml/
+
+# npm package archives
+*.tgz
 
 # Logs
 npm-debug.log*

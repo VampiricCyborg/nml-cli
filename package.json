@@ -1,9 +1,9 @@
 {
-  "name": "plumb-cli",
+  "name": "nml-cli",
   "version": "0.1.0",
   "description": "Independently verify claims made by AI coding agents.",
   "type": "module",
-  "bin": {"plumb": "dist/cli.js"},
+  "bin": {"nml": "dist/cli.js"},
   "files": ["dist"],
   "scripts": {
     "build": "tsc",

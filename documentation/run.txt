@@ -1,0 +1,130 @@
+• ### 1. Install prerequisites
+
+  Install:
+
+  - Node.js 20+
+  - Git
+
+  Then clone and enter the project:
+
+  git clone https://github.com/VampiricCyborg/nml-cli.git
+  cd nml-cli
+
+  ### 2. Install dependencies and build
+
+  npm install
+  npm run build
+
+  ### 3. Run the test suite
+
+  npm test
+  npm run lint
+
+  ### 4. Use it inside a Git repository
+
+  From the repository you want to inspect:
+
+  nml check
+
+  nml finds the current Git repository, detects a tests-pass claim in the latest commit, and independently runs the project’s test
+  command.
+
+  For a local checkout without installing globally:
+
+  node /path/to/nml-cli/dist/cli.js check
+
+  ### 5. Install the CLI globally
+
+  From the nml-cli directory:
+
+  npm link
+
+  Now nml is available from any Git repository.
+
+  ### 6. Check a specific commit
+
+  nml check --commit HEAD
+
+  Or specify another commit:
+
+  nml check --commit abc1234
+
+  ### 7. Specify the test command
+
+  By default, nml infers npm test from package.json.
+
+  Use another command with:
+
+  nml check --test-cmd "python -m pytest"
+
+  For example:
+
+  nml check --test-cmd "npm run test:unit"
+
+  ### 8. Check a range of commits
+
+  nml check --range main..feature-branch
+
+  Only commits containing supported tests-pass claims are checked.
+
+  For machine-readable JSON:
+
+  nml check --range main..feature-branch --json
+
+  ### 9. Read the result
+
+  Possible verdicts include:
+
+  - verified — the commit claimed tests passed, and the fresh test run passed.
+  - false_claim — the commit claimed tests passed, but the fresh test run failed or timed out.
+  - low_confidence_claim — indirect wording was detected.
+  - no_claim — no supported claim was found.
+
+  A false_claim causes the command to exit with status code 1.
+
+  ### 10. Inspect the receipt
+
+  Receipts are written to:
+
+  .nml/<short-commit-sha>.json
+
+  Example:
+
+  cat .nml/abc1234.json
+
+  On PowerShell:
+
+  Get-Content .nml\abc1234.json
+
+  ### 11. Install the pre-push hook
+
+  Inside the repository being protected:
+
+  nml install-hook
+
+  Future pushes will be checked automatically:
+
+  git push origin feature-branch
+
+  A push is blocked when a commit produces false_claim.
+
+  To remove the hook:
+
+  nml uninstall-hook
+
+  ### 12. Run the demo
+
+  From the nml-cli project directory:
+
+  macOS/Linux:
+
+  npm run build
+  bash scripts/demo-false-claim.sh
+
+  Windows PowerShell:
+
+  npm run build
+  powershell -ExecutionPolicy Bypass -File .\scripts\demo-false-claim.ps1
+
+  The demo creates a temporary repository with a commit claiming “tests pass,” deliberately makes its test fail, and shows nml catching
+  the claim as false_claim.

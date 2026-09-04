@@ -1,10 +1,10 @@
-# plub
+# nml
 
 ![build](https://img.shields.io/badge/build-passing-brightgreen)
 ![node](https://img.shields.io/badge/node-%3E%3D20-blue)
 ![license](https://img.shields.io/badge/license-MIT-lightgrey)
 
-`plub` independently verifies "tests pass" claims made in git commits by re-running the project's tests and writing a shareable receipt — instead of trusting an AI coding agent's (or a human's) self-report.
+`nml` independently verifies "tests pass" claims made in git commits by re-running the project's tests and writing a shareable receipt — instead of trusting an AI coding agent's (or a human's) self-report.
 
 ## The problem
 
@@ -23,7 +23,7 @@ flowchart LR
     B -->|"no claim"| F["no_claim verdict\n(verifier not run)"]
     C --> D["Real test command\n(e.g. npm test)"]
     D --> E["Receipt generator\nclaim vs. actual result"]
-    E --> G[".plub/&lt;sha&gt;.json\n+ CLI summary"]
+    E --> G[".nml/&lt;sha&gt;.json\n+ CLI summary"]
 ```
 
 Two properties matter more than anything else in this design:
@@ -47,9 +47,9 @@ Two properties matter more than anything else in this design:
 
 This project builds on an established evidence-and-gating pattern; it does not claim to invent that category.
 
-- [MartinLoop](https://martinloop.com/) is a shipped CLI/MCP tool for running coding agents with budgets, verification gates, rollback/stop rules, and signed per-run receipts. `plub` is narrower and aimed at an individual developer or hackathon team: it starts from an existing git commit, extracts a claim from its message, and emits a simple receipt for that claim rather than governing an agent run or spend.
-- [HORKOS](https://github.com/VeritasForge/demiurge) is part of the Demiurge tooling ecosystem and uses deterministic Claude Code evidence-audit hooks to block completion without proof. `plub` is a standalone git-focused CLI: its current integration is a pre-push hook, and its narrow differentiator is commit-message claim extraction plus a fresh test check.
-- [EviBound](https://arxiv.org/abs/2511.05524) is an academic governance framework for autonomous research agents, using approval and post-execution evidence gates tied to queryable artifacts such as MLflow runs. `plub` targets local software repositories and a single claim type, "tests pass," rather than research workflow governance.
+- [MartinLoop](https://martinloop.com/) is a shipped CLI/MCP tool for running coding agents with budgets, verification gates, rollback/stop rules, and signed per-run receipts. `nml` is narrower and aimed at an individual developer or hackathon team: it starts from an existing git commit, extracts a claim from its message, and emits a simple receipt for that claim rather than governing an agent run or spend.
+- [HORKOS](https://github.com/VeritasForge/demiurge) is part of the Demiurge tooling ecosystem and uses deterministic Claude Code evidence-audit hooks to block completion without proof. `nml` is a standalone git-focused CLI: its current integration is a pre-push hook, and its narrow differentiator is commit-message claim extraction plus a fresh test check.
+- [EviBound](https://arxiv.org/abs/2511.05524) is an academic governance framework for autonomous research agents, using approval and post-execution evidence gates tied to queryable artifacts such as MLflow runs. `nml` targets local software repositories and a single claim type, "tests pass," rather than research workflow governance.
 
 The practical scope difference is intentionally small: individual/hackathon-focused usage, commit-message claim extraction, and one claim type end-to-end. This is an incremental extension of a validated pattern, not a new category.
 
@@ -58,8 +58,8 @@ The practical scope difference is intentionally small: individual/hackathon-focu
 Requires Node.js 20 or newer and git.
 
 ```bash
-git clone https://github.com/VampiricCyborg/plumb-cli.git
-cd plumb-cli
+git clone https://github.com/VampiricCyborg/nml-cli.git
+cd nml-cli
 npm install
 npm run build
 npm link
@@ -72,29 +72,29 @@ For a local checkout without linking, use `node dist/cli.js` in the examples bel
 From any directory inside a git repository:
 
 ```bash
-plub check
+nml check
 ```
 
-If `package.json` has a test script, `plub` infers `npm test`. To provide another command:
+If `package.json` has a test script, `nml` infers `npm test`. To provide another command:
 
 ```bash
-plub check --test-cmd "python -m pytest"
+nml check --test-cmd "python -m pytest"
 ```
 
 Check a single ref or all commits introduced by a branch:
 
 ```bash
-plub check --commit HEAD
-plub check --range main..feature-branch
-plub check --range origin/main..HEAD --json
+nml check --commit HEAD
+nml check --range main..feature-branch
+nml check --range origin/main..HEAD --json
 ```
 
-Commits without a tests-pass claim are skipped in range mode. Each claimed commit gets a receipt in `.plub/<short-sha>.json`.
+Commits without a tests-pass claim are skipped in range mode. Each claimed commit gets a receipt in `.nml/<short-sha>.json`.
 
 Install the optional pre-push check:
 
 ```bash
-plub install-hook
+nml install-hook
 git push origin feature-branch
 ```
 
@@ -107,7 +107,7 @@ git push --no-verify
 Remove the managed hook with:
 
 ```bash
-plub uninstall-hook
+nml uninstall-hook
 ```
 
 ## Verdicts and receipts
@@ -117,7 +117,7 @@ plub uninstall-hook
 - `low_confidence_claim`: indirect language such as "CI is passing" was detected; the test result is recorded but the wording is intentionally not treated as a definitive claim.
 - `no_claim`: no supported claim was found. In range mode, these commits do not create receipts.
 
-Use `--json` for machine-readable output. Receipts include the commit SHA, extracted claim, test command/result, raw stdout/stderr, exit code, duration, verdict, and timestamp. Example receipt (`.plub/a1b2c3d.json`):
+Use `--json` for machine-readable output. Receipts include the commit SHA, extracted claim, test command/result, raw stdout/stderr, exit code, duration, verdict, and timestamp. Example receipt (`.nml/a1b2c3d.json`):
 
 ```json
 {
@@ -144,7 +144,7 @@ Use `--json` for machine-readable output. Receipts include the commit SHA, extra
 
 ## Demo
 
-A reproducible before/after terminal demo is in [`scripts/`](./scripts). It creates a temporary repository, makes an agent-authored commit claiming "tests pass", deliberately makes the test command fail, and shows `plub` returning `false_claim`.
+A reproducible before/after terminal demo is in [`scripts/`](./scripts). It creates a temporary repository, makes an agent-authored commit claiming "tests pass", deliberately makes the test command fail, and shows `nml` returning `false_claim`.
 
 ```bash
 npm run build
@@ -156,7 +156,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\demo-false-claim.ps1
 
 ## Validation
 
-Run manually against several personal repositories containing AI-agent-generated commits (Phase 5 of the build). Across the commits scanned, `plub` correctly separated genuine passing claims from commits where the claimed test status did not match a fresh run, and correctly skipped commits with no test-related claim rather than forcing a verdict. This was a small, self-run check, not a broader user study — see [Roadmap](#roadmap--deferred-work).
+Run manually against several personal repositories containing AI-agent-generated commits (Phase 5 of the build). Across the commits scanned, `nml` correctly separated genuine passing claims from commits where the claimed test status did not match a fresh run, and correctly skipped commits with no test-related claim rather than forcing a verdict. This was a small, self-run check, not a broader user study — see [Roadmap](#roadmap--deferred-work).
 
 ## Current scope and explicit non-goals
 
