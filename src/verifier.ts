@@ -12,7 +12,13 @@ export interface VerificationResult {
   durationMs: number;
   timestamp: string;
   timedOut: boolean;
-  reason?: 'timeout' | 'spawn_error' | 'command_not_found';
+  reason?:
+    | 'timeout'
+    | 'spawn_error'
+    | 'command_not_found'
+    | 'setup_failed'
+    | 'checkout_failed'
+    | 'working_tree_mismatch';
 }
 
 export class VerificationError extends Error {}

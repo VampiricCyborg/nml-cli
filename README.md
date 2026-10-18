@@ -143,10 +143,12 @@ nml uninstall-hook
   claim that the tests failed.
 - `no_claim`: no supported claim was found. In range mode, these commits do not create receipts.
 
-Use `--json` for machine-readable output. Receipts include the commit SHA, extracted claim, test command/result, raw stdout/stderr, exit code, duration, verdict, and timestamp. Example receipt (`.nml/a1b2c3d.json`):
+Use `--json` for machine-readable output. Receipts use schema version `1` and include the nml version, full commit SHA, extracted claim, checkout mode/SHA, runtime environment, test command/result, raw stdout/stderr, exit code, duration, verdict, and timestamp. Inconclusive receipts also include a reason (and `verification.reason` when a command ran). Example receipt (`.nml/a1b2c3d.json`):
 
 ```json
 {
+  "schemaVersion": 1,
+  "nmlVersion": "0.1.0",
   "commit": "a1b2c3d4e5f6",
   "claim": {
     "type": "tests_pass",
@@ -163,10 +165,23 @@ Use `--json` for machine-readable output. Receipts include the commit SHA, extra
     "durationMs": 4213,
     "stderr": "1 failing\n  1) LoginRedirect > should redirect after auth"
   },
+  "checkout": {
+    "mode": "worktree",
+    "sha": "a1b2c3d4e5f6789012345678901234567890abcd"
+  },
+  "environment": {
+    "node": "v20.19.0",
+    "platform": "win32"
+  },
   "verdict": "false_claim",
   "timestamp": "2026-08-20T09:14:02Z"
 }
 ```
+
+The commit SHA, claim, checkout mode/SHA, nml version, and verdict are stable
+for the same inputs. Timestamp, duration, captured output, and environment can
+vary between runs. A receipt is evidence of one run, not a cryptographic
+signature.
 
 ## Demo
 

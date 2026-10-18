@@ -70,6 +70,12 @@ describe('checkCommit', () => {
 
     expect(receipt.verdict).toBe('verified');
     expect(receipt.verification?.passed).toBe(true);
+    expect(receipt).toMatchObject({
+      schemaVersion: 1,
+      nmlVersion: '0.1.0',
+      checkout: { mode: 'worktree', sha: receipt.commit },
+      environment: { node: process.version, platform: process.platform },
+    });
     expect(
       JSON.parse(
         await readFile(
@@ -153,7 +159,11 @@ describe('checkCommit', () => {
       encoding: 'utf8',
     }).trim().split(/^worktree /m).filter(Boolean);
 
-    expect(receipt).toMatchObject({ verdict: 'inconclusive', reason: 'timeout' });
+    expect(receipt).toMatchObject({
+      verdict: 'inconclusive',
+      reason: 'timeout',
+      verification: { reason: 'timeout' },
+    });
     expect(worktrees).toHaveLength(1);
   });
 
@@ -163,6 +173,22 @@ describe('checkCommit', () => {
     const receipt = await checkCommit({ cwd: repo, testCmd: 'nml-command-that-does-not-exist' });
 
     expect(receipt).toMatchObject({ verdict: 'inconclusive', reason: 'command_not_found' });
+  });
+
+  it('returns inconclusive when dependency setup fails', async () => {
+    const repo = await makeTestRepo('implementation; all tests pass', 'process.exit(0)\n');
+
+    const receipt = await checkCommit({
+      cwd: repo,
+      testCmd: 'node test.js',
+      setupCmd: 'node -e "process.exit(1)"',
+    });
+
+    expect(receipt).toMatchObject({
+      verdict: 'inconclusive',
+      reason: 'setup_failed',
+      verification: { reason: 'setup_failed', passed: false },
+    });
   });
 
   it('can explicitly verify in place and rejects a mismatched checkout', async () => {

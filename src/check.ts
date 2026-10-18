@@ -4,6 +4,7 @@ import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { promisify } from 'node:util';
 import process from 'node:process';
+import packageJson from '../package.json' with { type: 'json' };
 import { extractClaim, type Claim } from './claim-parser.js';
 import { type VerificationResult, verifyCommand } from './verifier.js';
 
@@ -30,12 +31,18 @@ export interface CheckoutInfo {
 }
 
 export interface CheckReceipt {
+  schemaVersion: 1;
+  nmlVersion: string;
   commit: string;
   claim: Claim;
   verification: VerificationResult | null;
   verdict: CheckVerdict;
   reason?: InconclusiveReason;
   checkout: CheckoutInfo;
+  environment: {
+    node: string;
+    platform: NodeJS.Platform;
+  };
   timestamp: string;
 }
 
@@ -172,6 +179,7 @@ export async function checkCommit(
           if (setupCmd) {
             const setup = await verify(setupCmd, worktreePath, options.timeoutMs);
             if (!setup.passed) {
+              verification = { ...setup, reason: 'setup_failed' };
               reason = 'setup_failed';
             }
           }
@@ -196,12 +204,18 @@ export async function checkCommit(
   }
 
   const receipt: CheckReceipt = {
+    schemaVersion: 1,
+    nmlVersion: packageJson.version,
     commit,
     claim,
     verification,
     verdict,
     ...(reason ? { reason } : {}),
     checkout,
+    environment: {
+      node: process.version,
+      platform: process.platform,
+    },
     timestamp: new Date().toISOString(),
   };
   const receiptDir = join(cwd, '.nml');
