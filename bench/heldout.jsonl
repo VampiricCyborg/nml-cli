@@ -1,0 +1,8 @@
+{"id":"nml-7b3d74b","text":"feat: add deterministic tests-pass claim parser","label":"none","category":"unrelated-test-mention","source":"nml-cli"}
+{"id":"nml-dbcdbb9","text":"feat: add end-to-end plub check command","label":"none","category":"unrelated-test-mention","source":"nml-cli"}
+{"id":"nml-b43cc28","text":"feat: polish git integration and add pre-push verification hook","label":"none","category":"unrelated-test-mention","source":"nml-cli"}
+{"id":"nml-2add6e","text":"verify build, lint, tests, and npm package contents","label":"none","category":"unrelated-test-mention","source":"nml-cli"}
+{"id":"nml-5658f83","text":"Readme.md update","label":"none","category":"unrelated-test-mention","source":"nml-cli"}
+{"id":"candidate-1","text":"Tests pass after fixing the parser","label":"genuine","category":"explicit-status","source":"nml-cli-candidate"}
+{"id":"candidate-2","text":"If tests pass, merge this change","label":"none","category":"conditional","source":"nml-cli-candidate"}
+{"id":"candidate-3","text":"Make the tests pass before release","label":"goal","category":"goal-imperative","source":"nml-cli-candidate"}

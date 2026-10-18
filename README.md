@@ -245,6 +245,20 @@ npm run lint
 npm test
 ```
 
+The development claim-detection benchmark can be run with:
+
+```bash
+npm run bench
+```
+
+The development set contains 24 regression examples (12 genuine claims, 6
+goal statements, and 6 false positives). The held-out file currently contains
+candidate examples and is intentionally skipped by the runner until a human
+confirms every label; its metrics must not be used to tune the parser. The
+development examples were used during the parser fix, so their results are
+regression measurements, not evidence of recall on unseen data. Recall in the
+wild remains unknown.
+
 CI runs the same build, lint, and test checks on pushes and pull requests.
 
 ## License
