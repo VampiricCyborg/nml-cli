@@ -97,6 +97,21 @@ nml check --range main..feature-branch
 nml check --range origin/main..HEAD --json
 ```
 
+By default, each claimed commit is checked in a fresh detached Git worktree at
+that commit, so later edits in the current working tree cannot change the
+result. A worktree starts without dependencies. For Node projects containing a
+`package-lock.json`, nml automatically runs `npm ci` before the test command;
+provide another setup command when needed:
+
+```bash
+nml check --setup-cmd "npm install"
+```
+
+Use `--in-place` only when you intentionally want the current checkout. nml
+will mark the result `inconclusive` if the working tree is dirty or its HEAD
+does not match the commit being checked. `--strict` makes inconclusive results
+exit nonzero as well.
+
 Commits without a tests-pass claim are skipped in range mode. Each claimed commit gets a receipt in `.nml/<short-sha>.json`.
 
 Install the optional pre-push check:
@@ -123,6 +138,9 @@ nml uninstall-hook
 - `verified`: a high-confidence tests-pass claim was followed by a passing fresh test run.
 - `false_claim`: a high-confidence claim was followed by a failing or timed-out test run.
 - `low_confidence_claim`: indirect language such as "CI is passing" was detected; the test result is recorded but the wording is intentionally not treated as a definitive claim.
+- `inconclusive`: the claim could not be fairly judged because checkout, setup,
+  timeout, command execution, or working-tree validation failed. This is not a
+  claim that the tests failed.
 - `no_claim`: no supported claim was found. In range mode, these commits do not create receipts.
 
 Use `--json` for machine-readable output. Receipts include the commit SHA, extracted claim, test command/result, raw stdout/stderr, exit code, duration, verdict, and timestamp. Example receipt (`.nml/a1b2c3d.json`):

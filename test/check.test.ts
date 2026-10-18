@@ -21,6 +21,16 @@ async function makeRepo(message: string): Promise<string> {
   return repo;
 }
 
+async function makeTestRepo(message: string, testSource: string): Promise<string> {
+  const repo = await makeRepo(message);
+  await writeFile(join(repo, 'test.js'), testSource);
+  execFileSync('git', ['add', 'test.js'], { cwd: repo });
+  execFileSync('git', ['commit', '-qm', 'add committed test'], { cwd: repo });
+  execFileSync('git', ['reset', '--soft', 'HEAD^'], { cwd: repo });
+  execFileSync('git', ['commit', '-qm', message], { cwd: repo });
+  return repo;
+}
+
 afterEach(async () => {
   await Promise.all(
     temporaryRepos
@@ -113,5 +123,58 @@ describe('checkCommit', () => {
     }));
     expect(receipts).toHaveLength(1);
     expect(receipts[0].commit).toBe(feature);
+  });
+
+  it('verifies the committed tests instead of a modified working tree', async () => {
+    const repo = await makeTestRepo('implementation; all tests pass', 'process.exit(1)\n');
+    await writeFile(join(repo, 'test.js'), 'process.exit(0)\n');
+
+    const receipt = await checkCommit({ cwd: repo, testCmd: 'node test.js' });
+
+    expect(receipt.verdict).toBe('false_claim');
+    expect(receipt.checkout).toEqual({ mode: 'worktree', sha: receipt.commit });
+  });
+
+  it('verifies a passing committed test even when the working tree is broken', async () => {
+    const repo = await makeTestRepo('implementation; all tests pass', 'process.exit(0)\n');
+    await writeFile(join(repo, 'test.js'), 'process.exit(1)\n');
+
+    const receipt = await checkCommit({ cwd: repo, testCmd: 'node test.js' });
+
+    expect(receipt.verdict).toBe('verified');
+  });
+
+  it('returns inconclusive for timeout and leaves no linked worktree', async () => {
+    const repo = await makeTestRepo('implementation; all tests pass', 'setInterval(() => {}, 1000)\n');
+
+    const receipt = await checkCommit({ cwd: repo, testCmd: 'node test.js', timeoutMs: 300 });
+    const worktrees = execFileSync('git', ['worktree', 'list', '--porcelain'], {
+      cwd: repo,
+      encoding: 'utf8',
+    }).trim().split(/^worktree /m).filter(Boolean);
+
+    expect(receipt).toMatchObject({ verdict: 'inconclusive', reason: 'timeout' });
+    expect(worktrees).toHaveLength(1);
+  });
+
+  it('returns inconclusive when the test command cannot be found', async () => {
+    const repo = await makeRepo('implementation; all tests pass');
+
+    const receipt = await checkCommit({ cwd: repo, testCmd: 'nml-command-that-does-not-exist' });
+
+    expect(receipt).toMatchObject({ verdict: 'inconclusive', reason: 'command_not_found' });
+  });
+
+  it('can explicitly verify in place and rejects a mismatched checkout', async () => {
+    const repo = await makeRepo('implementation; all tests pass');
+    await writeFile(join(repo, 'file.txt'), 'changed\n');
+
+    const receipt = await checkCommit({ cwd: repo, inPlace: true, testCmd: 'node -e "process.exit(0)"' });
+
+    expect(receipt).toMatchObject({
+      verdict: 'inconclusive',
+      reason: 'working_tree_mismatch',
+      checkout: { mode: 'working-tree' },
+    });
   });
 });

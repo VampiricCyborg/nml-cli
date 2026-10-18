@@ -12,6 +12,7 @@ export interface VerificationResult {
   durationMs: number;
   timestamp: string;
   timedOut: boolean;
+  reason?: 'timeout' | 'spawn_error' | 'command_not_found';
 }
 
 export class VerificationError extends Error {}
@@ -31,12 +32,12 @@ async function validateCwd(cwd: string): Promise<void> {
 function killProcessTree(child: ReturnType<typeof spawn>): void {
   if (child.pid === undefined) return;
   if (process.platform === 'win32') {
-    child.kill();
     try {
       execFileSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
     } catch {
       // The process may already have exited between child.kill and taskkill.
     }
+    child.kill();
   } else {
     try {
       process.kill(-child.pid, 'SIGKILL');
@@ -78,9 +79,12 @@ export async function verifyCommand(
       killProcessTree(child);
       // Do not wait for a descendant that may keep stdio handles open after
       // the process tree has been terminated.
-      finish(null);
+      finish(null, 'timeout');
     }, timeoutMs);
-    const finish = (exitCode: number | null) => {
+    const finish = (
+      exitCode: number | null,
+      reason?: VerificationResult['reason'],
+    ) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
@@ -94,13 +98,23 @@ export async function verifyCommand(
         durationMs: Date.now() - startedAt,
         timestamp,
         timedOut,
+        reason,
       });
     };
     child.once('error', (error: NodeJS.ErrnoException) => {
       stderr += `Unable to execute command: ${error.message}\n`;
-      finish(null);
+      finish(null, 'spawn_error');
     });
-    child.once('close', (exitCode) => finish(exitCode));
+    child.once('close', (exitCode) => {
+      const commandNotFound =
+        exitCode === 126 ||
+        exitCode === 127 ||
+        /command not found|not recognized as an internal or external command/i.test(stderr);
+      finish(
+        exitCode,
+        commandNotFound ? 'command_not_found' : undefined,
+      );
+    });
   });
 }
 

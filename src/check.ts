@@ -1,6 +1,7 @@
-import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import { promisify } from 'node:util';
 import process from 'node:process';
 import { extractClaim, type Claim } from './claim-parser.js';
@@ -9,13 +10,32 @@ import { type VerificationResult, verifyCommand } from './verifier.js';
 const execFileAsync = promisify(execFile);
 
 export type CheckVerdict =
-  'verified' | 'false_claim' | 'no_claim' | 'low_confidence_claim';
+  | 'verified'
+  | 'false_claim'
+  | 'no_claim'
+  | 'low_confidence_claim'
+  | 'inconclusive';
+
+export type InconclusiveReason =
+  | 'timeout'
+  | 'spawn_error'
+  | 'command_not_found'
+  | 'setup_failed'
+  | 'checkout_failed'
+  | 'working_tree_mismatch';
+
+export interface CheckoutInfo {
+  mode: 'worktree' | 'working-tree';
+  sha: string;
+}
 
 export interface CheckReceipt {
   commit: string;
   claim: Claim;
   verification: VerificationResult | null;
   verdict: CheckVerdict;
+  reason?: InconclusiveReason;
+  checkout: CheckoutInfo;
   timestamp: string;
 }
 
@@ -24,6 +44,8 @@ export interface CheckOptions {
   testCmd?: string;
   cwd?: string;
   timeoutMs?: number;
+  setupCmd?: string;
+  inPlace?: boolean;
 }
 
 export type Verify = typeof verifyCommand;
@@ -70,6 +92,37 @@ export async function inferTestCommand(repoRoot: string): Promise<string | undef
   }
 }
 
+async function hasFile(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function gitStatus(cwd: string): Promise<string> {
+  return git(['status', '--porcelain'], cwd);
+}
+
+async function removeWorktree(repoRoot: string, worktreePath: string, parentPath: string): Promise<void> {
+  try {
+    await execFileAsync('git', ['worktree', 'remove', '--force', worktreePath], {
+      cwd: repoRoot,
+      maxBuffer: 1024 * 1024,
+      timeout: 1000,
+    });
+  } catch {
+    // A just-killed Windows process may briefly keep its cwd locked. The
+    // forced removal below and prune still clean the registration.
+  }
+  await rm(parentPath, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  await execFileAsync('git', ['worktree', 'prune'], {
+    cwd: repoRoot,
+    maxBuffer: 1024 * 1024,
+  });
+}
+
 export async function checkCommit(
   options: CheckOptions,
   verify: Verify = verifyCommand,
@@ -81,6 +134,8 @@ export async function checkCommit(
   const claim = extractClaim(message);
   let verification: VerificationResult | null = null;
   let verdict: CheckVerdict;
+  let reason: InconclusiveReason | undefined;
+  let checkout: CheckoutInfo = { mode: 'worktree', sha: commit };
 
   if (claim.type === 'none') {
     verdict = 'no_claim';
@@ -89,13 +144,55 @@ export async function checkCommit(
     if (!testCmd) {
       throw new Error('Unable to infer a test command. Pass --test-cmd explicitly.');
     }
-    verification = await verify(testCmd, cwd, options.timeoutMs);
-    verdict =
-      claim.confidence === 'low'
+    if (options.inPlace) {
+      checkout = { mode: 'working-tree', sha: commit };
+      const head = await git(['rev-parse', 'HEAD'], cwd);
+      if (head !== commit || (await gitStatus(cwd)) !== '') {
+        verdict = 'inconclusive';
+        reason = 'working_tree_mismatch';
+      } else {
+        verification = await verify(testCmd, cwd, options.timeoutMs);
+      }
+    } else {
+      const parentPath = await mkdtemp(join(tmpdir(), 'nml-worktree-'));
+      const worktreePath = join(parentPath, 'checkout');
+      let added = false;
+      try {
+        try {
+          await execFileAsync('git', ['worktree', 'add', '--detach', worktreePath, commit], {
+            cwd,
+            maxBuffer: 1024 * 1024,
+          });
+          added = true;
+        } catch {
+          reason = 'checkout_failed';
+        }
+        if (added) {
+          const setupCmd = options.setupCmd ?? (await hasFile(join(worktreePath, 'package-lock.json')) ? 'npm ci' : undefined);
+          if (setupCmd) {
+            const setup = await verify(setupCmd, worktreePath, options.timeoutMs);
+            if (!setup.passed) {
+              reason = 'setup_failed';
+            }
+          }
+          if (!reason) verification = await verify(testCmd, worktreePath, options.timeoutMs);
+        }
+      } finally {
+        if (added) await removeWorktree(cwd, worktreePath, parentPath);
+        else await rm(parentPath, { recursive: true, force: true });
+      }
+    }
+    if (reason) verdict = 'inconclusive';
+    else if (verification?.reason) {
+      reason = verification.reason;
+      verdict = 'inconclusive';
+    } else {
+      verdict = claim.confidence === 'low'
         ? 'low_confidence_claim'
-        : verification.passed
+        : verification?.passed
           ? 'verified'
           : 'false_claim';
+    }
   }
 
   const receipt: CheckReceipt = {
@@ -103,6 +200,8 @@ export async function checkCommit(
     claim,
     verification,
     verdict,
+    ...(reason ? { reason } : {}),
+    checkout,
     timestamp: new Date().toISOString(),
   };
   const receiptDir = join(cwd, '.nml');
@@ -158,6 +257,8 @@ export function formatCheckSummary(receipt: CheckReceipt): string {
       'The commit claimed tests pass, but the independent test run failed.',
       'Verdict: false_claim',
     );
+  } else if (receipt.verdict === 'inconclusive') {
+    lines.push(`Verdict: inconclusive (${receipt.reason ?? 'unknown reason'})`);
   } else {
     lines.push(`Verdict: ${receipt.verdict}`);
   }
