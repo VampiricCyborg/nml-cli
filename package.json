@@ -1,7 +1,12 @@
 {
   "name": "@madhav_ms/nml-cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Independently verify claims made by AI coding agents.",
+  "repository": {"type": "git", "url": "https://github.com/VampiricCyborg/nml-cli.git"},
+  "homepage": "https://github.com/VampiricCyborg/nml-cli#readme",
+  "bugs": {"url": "https://github.com/VampiricCyborg/nml-cli/issues"},
+  "license": "MIT",
+  "keywords": ["ai", "coding-agents", "testing", "verification", "git", "cli"],
   "type": "module",
   "bin": {"nml": "dist/cli.js"},
   "files": ["dist"],

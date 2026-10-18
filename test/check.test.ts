@@ -72,7 +72,7 @@ describe('checkCommit', () => {
     expect(receipt.verification?.passed).toBe(true);
     expect(receipt).toMatchObject({
       schemaVersion: 1,
-      nmlVersion: '0.1.0',
+      nmlVersion: '0.2.0',
       checkout: { mode: 'worktree', sha: receipt.commit },
       environment: { node: process.version, platform: process.platform },
     });
