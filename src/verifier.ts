@@ -67,6 +67,10 @@ export async function verifyCommand(
   const startedAt = Date.now();
 
   return new Promise((resolve) => {
+    // The command is intentionally a user-supplied shell string so callers
+    // can use commands such as `npm test` or `python -m pytest`. Never build
+    // this value by interpolating commit messages, refs, or other repository
+    // content into it. A child process/worktree is not a security sandbox.
     const child = spawn(command, {
       cwd,
       shell: true,

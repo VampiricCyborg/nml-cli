@@ -183,6 +183,16 @@ for the same inputs. Timestamp, duration, captured output, and environment can
 vary between runs. A receipt is evidence of one run, not a cryptographic
 signature.
 
+## Security and trust boundary
+
+`nml` runs the configured test and setup commands as arbitrary code with the
+permissions of the current user. Only run it on repositories you trust. A
+subprocess and a detached Git worktree isolate files used for the check, but
+they are not a security sandbox and do not prevent network access, filesystem
+access, or other side effects. Never interpolate an untrusted commit message,
+ref, or repository file into a shell command; pass commands explicitly through
+`--test-cmd` and `--setup-cmd`.
+
 ## Demo
 
 A reproducible before/after terminal demo is in [`scripts/`](./scripts). It creates a temporary repository, makes an agent-authored commit claiming "tests pass", deliberately makes the test command fail, and shows `nml` returning `false_claim`.
