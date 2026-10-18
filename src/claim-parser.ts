@@ -16,13 +16,31 @@ export type Claim = TestsPassClaim | NoClaim;
 
 type ClaimPattern = { pattern: RegExp; confidence: ClaimConfidence };
 
-// Explicit test-result language is high confidence. CI/status shorthand is
-// intentionally low confidence because it may describe more than test results.
-const claimPatterns: ClaimPattern[] = [
-  {
-    pattern: /\b(?:all\s+)?tests?\s+(?:are\s+)?pass(?:es|ed|ing)?\b(?!\s+through\b)/i,
-    confidence: 'high',
-  },
+// What may follow "pass/passes/passing" for it to read as a *status* ("tests
+// pass now", "tests passing on node 8", "tests pass, time for a PR") rather
+// than a verb with an object ("test passing parameter", "tests pass the
+// method", "the test passes invalid values"). An allow-list is deliberate:
+// anything not recognised as a status continuation is NOT treated as a claim.
+const STATUS_END =
+  '(?=[ \\t]*(?:\\r?\\n|$|[.,;:!?)\\]…✅✓–—-])|\\s+(?:now|again|here|locally|fine|cleanly|successfully|everywhere|too|as\\s+well|this\\s+time|on|in|under|with|without|using|for|after|before|against|across|at|once|since|and|but)\\b)';
+
+// "tests pass" / "all tests are passing" and singular forms.
+const TESTS_PASS = new RegExp(
+  '\\b(?:all\\s+)?tests?\\s+(?:are\\s+)?pass(?:es|ed|ing)?\\b' + STATUS_END,
+  'gi',
+);
+
+// A conditional ("if tests are passing…") is not a claim about this commit.
+const CONDITIONAL_PREFIX = /\b(?:if|unless|until|whether|when)\s+(?:the\s+)?$/i;
+
+// An imperative or goal ("make the tests pass", "get tests passing") describes
+// the intent of a change, not a result, so it is only ever low confidence.
+const GOAL_PREFIX =
+  /\b(?:make|makes|made|making|get|gets|got|getting|fix|fixes|fixed|fixing|help|helps)\s+(?:(?:the|all|these|those|our|regular|remaining|failing)\s+)*$/i;
+
+// Other explicit test-result language is high confidence. CI/status shorthand
+// is intentionally low confidence because it may describe more than test results.
+const otherPatterns: ClaimPattern[] = [
   {
     pattern: /\btest\s+suite\s+pass(?:es|ed|ing)?\b/i,
     confidence: 'high',
@@ -32,19 +50,36 @@ const claimPatterns: ClaimPattern[] = [
   { pattern: /\ball\s+green\b/i, confidence: 'low' },
 ];
 
+function makeClaim(
+  sourceText: string,
+  matchedText: string,
+  confidence: ClaimConfidence,
+): TestsPassClaim {
+  return { type: 'tests_pass', matchedText, sourceText, confidence };
+}
+
 export function extractClaim(sourceText: string): Claim {
-  for (const { pattern, confidence } of claimPatterns) {
+  let lowCandidate: TestsPassClaim | undefined;
+
+  for (const match of sourceText.matchAll(TESTS_PASS)) {
+    const prefix = sourceText.slice(0, match.index);
+    if (CONDITIONAL_PREFIX.test(prefix)) continue;
+    if (GOAL_PREFIX.test(prefix)) {
+      lowCandidate ??= makeClaim(sourceText, match[0], 'low');
+      continue;
+    }
+    return makeClaim(sourceText, match[0], 'high');
+  }
+
+  for (const { pattern, confidence } of otherPatterns) {
     const match = pattern.exec(sourceText);
     if (match?.[0]) {
-      return {
-        type: 'tests_pass',
-        matchedText: match[0],
-        sourceText,
-        confidence,
-      };
+      if (confidence === 'high') return makeClaim(sourceText, match[0], 'high');
+      lowCandidate ??= makeClaim(sourceText, match[0], 'low');
     }
   }
-  return { type: 'none' };
+
+  return lowCandidate ?? { type: 'none' };
 }
 
 export function formatClaimSummary(claim: Claim): string {
